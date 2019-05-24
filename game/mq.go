@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"log"
-	"sync"
 
 	"github.com/garyburd/redigo/redis"
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
@@ -25,10 +23,14 @@ func NewMessageQueue(key string, redisAddr string) *MessageQueue {
 	}
 }
 
-// Start starts the message queue
-func (mq *MessageQueue) Start(ctx context.Context, wg *sync.WaitGroup) (err error) {
-	err = mq.queue.WaitForConnection()
+// Ready checks if service is ready
+func (mq *MessageQueue) Ready() error {
+	return mq.queue.Ping()
+}
 
+// Start starts the message queue
+func (mq *MessageQueue) Start() (err error) {
+	err = mq.queue.WaitForConnection()
 	if err != nil {
 		return
 	}
@@ -54,7 +56,6 @@ func (mq *MessageQueue) Start(ctx context.Context, wg *sync.WaitGroup) (err erro
 			if err != nil {
 				return
 			}
-
 			log.Printf("[Info] Received message from queue: %s", message[1])
 		}
 	}()
@@ -64,11 +65,7 @@ func (mq *MessageQueue) Start(ctx context.Context, wg *sync.WaitGroup) (err erro
 // Stop stops message queue
 func (mq *MessageQueue) Stop() {
 	close(mq.quit)
-	mq.flush()
-	mq.queue.Close()
-}
-
-// flush deletes queue key to clear any pending messages
-func (mq *MessageQueue) flush() {
+	// delete queue key to clear pending messages
 	mq.queue.Delete(mq.key)
+	mq.queue.Close()
 }

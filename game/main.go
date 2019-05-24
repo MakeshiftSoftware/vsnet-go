@@ -10,9 +10,7 @@ func main() {
 	s := newServer(cfg)
 
 	if err := s.start(); err != nil {
-		if s.cancel != nil {
-			s.cancel()
-		}
+		s.cancel()
 		s.wg.Wait()
 		log.Fatalf("[Error] %+v", err)
 	}

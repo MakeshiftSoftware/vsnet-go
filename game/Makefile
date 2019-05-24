@@ -1,6 +1,4 @@
 GO           ?= go
-GOFMT        ?= $(GO)fmt
-pkgs          = ./...
 
 ## dev_run: Run the application main file.
 dev_run:

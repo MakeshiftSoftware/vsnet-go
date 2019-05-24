@@ -16,14 +16,15 @@ const serverNodePrefix = "Server:"
 
 // Server implementation
 type Server struct {
-	ctx          context.Context      // The context for the service
-	cancel       context.CancelFunc   // The cancellation function
-	wg           sync.WaitGroup       // The wait group
-	cfg          *Config              // The server configuration
-	id           string               // The unique server id
-	http         *http.Server         // The underlying HTTP server
-	messageQueue *MessageQueue        // The message queue service
-	registrar    *registrar.Registrar // The node registrar service
+	cfg          *Config              // Server configuration
+	ctx          context.Context      // Context for the service
+	cancel       context.CancelFunc   // Cancellation function
+	wg           sync.WaitGroup       // Wait group
+	id           string               // Unique server id
+	http         *http.Server         // Underlying HTTP server
+	hub          *Hub                 // Messaging hub
+	messageQueue *MessageQueue        // Message queue service
+	registrar    *registrar.Registrar // Node registrar service
 }
 
 type handler func(*Server, http.ResponseWriter, *http.Request) error
@@ -31,16 +32,16 @@ type handler func(*Server, http.ResponseWriter, *http.Request) error
 func newServer(cfg *Config) (s *Server) {
 	ctx, cancel := context.WithCancel(context.Background())
 	id := serverNodePrefix + uuid.NewV4().String()
-	id = "foo"
 
 	log.Printf("[Info] Server ID: %s", id)
 	log.Printf("[Info] Starting server on port %s", cfg.port)
 
 	s = &Server{
+		cfg:          cfg,
 		ctx:          ctx,
 		cancel:       cancel,
-		cfg:          cfg,
 		id:           id,
+		hub:          NewHub(),
 		messageQueue: NewMessageQueue(id, cfg.redisQueueService),
 		registrar: registrar.New(
 			id,
@@ -50,8 +51,11 @@ func newServer(cfg *Config) (s *Server) {
 		),
 	}
 
+	r := mux.NewRouter()
+	r.HandleFunc("/ws", s.wrapMiddleware(serveWs)).Methods("GET")
+
 	s.http = &http.Server{
-		Handler: s.newHandler(),
+		Handler: r,
 		Addr:    ":" + cfg.port,
 	}
 	return
@@ -60,23 +64,21 @@ func newServer(cfg *Config) (s *Server) {
 func (s *Server) start() (err error) {
 	cleanup.Listen(s.cancel, &s.wg)
 
-	if err = s.messageQueue.Start(s.ctx, &s.wg); err != nil {
+	s.hub.Start()
+
+	if err = s.messageQueue.Start(); err != nil {
 		return
 	}
 
-	if err = s.registrar.Start(s.ctx, &s.wg); err != nil {
+	if err = s.registrar.Start(); err != nil {
 		return
 	}
 
 	cleanup.Add(s.ctx, &s.wg, s.messageQueue.Stop)
 	cleanup.Add(s.ctx, &s.wg, s.registrar.Stop)
+	cleanup.Add(s.ctx, &s.wg, s.hub.Stop)
 
 	err = s.http.ListenAndServe()
-	return
-}
-
-func (s *Server) newHandler() (h http.Handler) {
-	h = mux.NewRouter()
 	return
 }
 

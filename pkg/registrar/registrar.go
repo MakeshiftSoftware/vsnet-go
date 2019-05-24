@@ -1,9 +1,7 @@
 package registrar
 
 import (
-	"context"
 	"fmt"
-	"sync"
 
 	"github.com/garyburd/redigo/redis"
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
@@ -40,7 +38,7 @@ func New(id string, ip string, port string, redisAddr string) *Registrar {
 }
 
 // Start starts the registrar
-func (r *Registrar) Start(ctx context.Context, wg *sync.WaitGroup) (err error) {
+func (r *Registrar) Start() (err error) {
 	err = r.registry.WaitForConnection()
 
 	if err != nil {
