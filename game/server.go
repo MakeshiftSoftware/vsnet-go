@@ -21,7 +21,7 @@ type Server struct {
 	wg           sync.WaitGroup       // The wait group
 	cfg          *Config              // The server configuration
 	id           string               // The unique server id
-	srv          *http.Server         // The underlying HTTP server
+	http         *http.Server         // The underlying HTTP server
 	messageQueue *MessageQueue        // The message queue service
 	registrar    *registrar.Registrar // The node registrar service
 }
@@ -31,6 +31,7 @@ type handler func(*Server, http.ResponseWriter, *http.Request) error
 func newServer(cfg *Config) (s *Server) {
 	ctx, cancel := context.WithCancel(context.Background())
 	id := serverNodePrefix + uuid.NewV4().String()
+	id = "foo"
 
 	log.Printf("[Info] Server ID: %s", id)
 	log.Printf("[Info] Starting server on port %s", cfg.port)
@@ -49,10 +50,8 @@ func newServer(cfg *Config) (s *Server) {
 		),
 	}
 
-	r := s.newHandler()
-
-	s.srv = &http.Server{
-		Handler: r,
+	s.http = &http.Server{
+		Handler: s.newHandler(),
 		Addr:    ":" + cfg.port,
 	}
 	return
@@ -72,7 +71,7 @@ func (s *Server) start() (err error) {
 	cleanup.Add(s.ctx, &s.wg, s.messageQueue.Stop)
 	cleanup.Add(s.ctx, &s.wg, s.registrar.Stop)
 
-	err = s.srv.ListenAndServe()
+	err = s.http.ListenAndServe()
 	return
 }
 

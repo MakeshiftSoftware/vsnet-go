@@ -36,21 +36,26 @@ func (mq *MessageQueue) Start(ctx context.Context, wg *sync.WaitGroup) (err erro
 	con := mq.queue.Pool.Get()
 
 	go func() {
-		defer con.Close()
-
 		for {
 			select {
 			case <-mq.quit:
+				con.Close()
 				return
-			default:
-				message, err := redis.ByteSlices(con.Do("BLPOP", mq.key, 0))
-
-				if err != nil {
-					log.Printf("[Error] Could not read message from queue: %+v", err)
-				}
-
-				log.Printf("[Info] Received message from queue: %s", message[1])
 			}
+		}
+	}()
+
+	go func() {
+		defer con.Close()
+
+		for {
+			message, err := redis.ByteSlices(con.Do("BLPOP", mq.key, 0))
+
+			if err != nil {
+				return
+			}
+
+			log.Printf("[Info] Received message from queue: %s", message[1])
 		}
 	}()
 	return
@@ -59,5 +64,11 @@ func (mq *MessageQueue) Start(ctx context.Context, wg *sync.WaitGroup) (err erro
 // Stop stops message queue
 func (mq *MessageQueue) Stop() {
 	close(mq.quit)
+	mq.flush()
 	mq.queue.Close()
+}
+
+// flush deletes queue key to clear any pending messages
+func (mq *MessageQueue) flush() {
+	mq.queue.Delete(mq.key)
 }

@@ -87,5 +87,5 @@ func (r *Registrar) registerNode() error {
 
 // unregisterNode removes node from registry
 func (r *Registrar) unregisterNode() error {
-	return r.registry.Delete(r.node.id)
+	return r.registry.Delete(r.key)
 }

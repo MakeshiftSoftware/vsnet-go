@@ -38,8 +38,8 @@ func (c *Client) WaitForConnection() error {
 }
 
 // Close closes the connection pool
-func (c *Client) Close() {
-	c.Pool.Close()
+func (c *Client) Close() error {
+	return c.Pool.Close()
 }
 
 // Ping pings redis
