@@ -10,5 +10,9 @@ prod_run: build
 
 ## build: Build the application.
 build:
-	rm -f game
-	$(GO) build -o game main.go
+	mkdir -p bin
+	rm -rf bin/masago
+	$(GO) build -o bin/masago main.go
+
+clean:
+	rm -rf bin
