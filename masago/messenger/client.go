@@ -84,27 +84,25 @@ func (c *Client) Write() {
 		c.sock.Close()
 	}()
 
-	go func() {
-		for {
-			select {
-			case msg, ok := <-c.send:
-				c.setWriteDeadline()
-				if !ok {
-					// The hub closed the channel
-					return
-				}
+	for {
+		select {
+		case msg, ok := <-c.send:
+			c.setWriteDeadline()
+			if !ok {
+				// The hub closed the channel
+				return
+			}
 
-				if err := c.sendMessage(msg); err != nil {
-					return
-				}
-			case <-ticker.C:
-				c.setWriteDeadline()
-				if err := c.sock.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
+			if err := c.sendMessage(msg); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.setWriteDeadline()
+			if err := c.sock.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
 			}
 		}
-	}()
+	}
 }
 
 // sendMessage sends message through socket
