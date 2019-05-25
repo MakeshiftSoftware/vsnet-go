@@ -32,7 +32,7 @@ func Listen(cancel context.CancelFunc, wg *sync.WaitGroup) {
 
 	go func() {
 		<-c
-		log.Print("[Info] Shutting down gracefully...")
+		log.Print("[info] cleaning up")
 
 		if cancel != nil {
 			cancel()
