@@ -25,9 +25,9 @@ func NewHub(name string, redisAddr string) *Hub {
 }
 
 // Start starts the hub
-func (h *Hub) Start() (err error) {
-	if err = h.queue.Start(); err != nil {
-		return
+func (h *Hub) Start() error {
+	if err := h.queue.Start(); err != nil {
+		return err
 	}
 
 	go func() {
@@ -42,12 +42,17 @@ func (h *Hub) Start() (err error) {
 			}
 		}
 	}()
-	return
+	return nil
 }
 
 // Stop stops the hub
 func (h *Hub) Stop() {
 	h.queue.Stop()
+}
+
+// Ready checks if hub is ready
+func (h *Hub) Ready() error {
+	return h.queue.Ready()
 }
 
 // OnClientConnected occurs when a new client connection is accepted

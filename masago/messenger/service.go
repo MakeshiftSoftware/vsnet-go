@@ -45,6 +45,7 @@ func NewService(cfg *config.Config) (s *Service) {
 	}
 
 	r := mux.NewRouter()
+	r.HandleFunc("/healthz", s.wrapMiddleware(healthcheck)).Methods("GET")
 	r.HandleFunc("/ws", s.wrapMiddleware(serveWs)).Methods("GET")
 
 	s.http = &http.Server{
@@ -55,22 +56,21 @@ func NewService(cfg *config.Config) (s *Service) {
 }
 
 // Start starts the service
-func (s *Service) Start() (err error) {
+func (s *Service) Start() error {
 	log.Printf("[info] starting service")
 	cleanup.Listen(s.cancel, &s.wg)
 	cleanup.Add(s.context, &s.wg, s.hub.Stop)
 	cleanup.Add(s.context, &s.wg, s.registrar.Stop)
 
-	if err = s.registrar.Start(); err != nil {
-		return
+	if err := s.registrar.Start(); err != nil {
+		return err
 	}
 
-	if err = s.hub.Start(); err != nil {
-		return
+	if err := s.hub.Start(); err != nil {
+		return err
 	}
 
-	err = s.http.ListenAndServe()
-	return
+	return s.http.ListenAndServe()
 }
 
 // Cancel cancel service context and wait for cleanup
@@ -78,6 +78,16 @@ func (s *Service) Cancel() {
 	log.Printf("[info] stopping service")
 	s.cancel()
 	s.wg.Wait()
+}
+
+func healthcheck(s *Service, w http.ResponseWriter, r *http.Request) error {
+	if err := s.registrar.Ready(); err != nil {
+		return err
+	}
+	if err := s.hub.Ready(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) wrapMiddleware(h handler) http.HandlerFunc {

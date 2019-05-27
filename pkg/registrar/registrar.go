@@ -1,14 +1,14 @@
 package registrar
 
 import (
-	"fmt"
-
 	"github.com/garyburd/redigo/redis"
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
 	"github.com/pkg/errors"
 )
 
 const redisNodePrefix = "Node:"
+
+var errNodeNotFound = errors.New("Node not found in registry")
 
 // Registrar implementation
 type Registrar struct {
@@ -38,38 +38,56 @@ func New(id string, ip string, port string, redisAddr string) *Registrar {
 }
 
 // Start starts the registrar
-func (r *Registrar) Start() (err error) {
-	err = r.registry.WaitForConnection()
-
-	if err != nil {
-		return
+func (r *Registrar) Start() error {
+	if err := r.registry.WaitForConnection(); err != nil {
+		return err
 	}
 
-	err = r.registerNode()
-	return
+	if err := r.registerNode(); err != nil {
+		return err
+	}
+	return nil
 }
 
-// Stop stops registrar
+// Stop stops the registrar
 func (r *Registrar) Stop() {
 	r.unregisterNode()
 	r.registry.Close()
 }
 
-// GetNode gets node from registry
-func (r *Registrar) GetNode() (node Node, err error) {
-	var values []interface{}
-	values, err = r.registry.Hgetall(r.key)
+// Ready checks if registrar is ready
+func (r *Registrar) Ready() error {
+	if err := r.registry.Ping(); err != nil {
+		return err
+	}
+
+	ok, err := r.registry.Exists(r.key)
 
 	if err != nil {
-		return
+		return err
+	}
+
+	if !ok {
+		return errNodeNotFound
+	}
+	return nil
+}
+
+// GetNode gets node from registry
+func (r *Registrar) GetNode() (Node, error) {
+	var node Node
+	values, err := r.registry.Hgetall(r.key)
+
+	if err != nil {
+		return node, err
 	}
 
 	if len(values) == 0 {
-		err = errors.New(fmt.Sprintf("Node %s not found in registry", r.key))
-	} else {
-		err = redis.ScanStruct(values, &node)
+		return node, errNodeNotFound
 	}
-	return
+
+	err = redis.ScanStruct(values, &node)
+	return node, err
 }
 
 // registerNode adds node to registry

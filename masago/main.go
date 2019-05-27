@@ -9,10 +9,10 @@ import (
 
 func main() {
 	cfg := config.New()
-	svc := messenger.NewService(cfg)
+	s := messenger.NewService(cfg)
 
-	if err := svc.Start(); err != nil {
-		svc.Cancel()
+	if err := s.Start(); err != nil {
+		s.Cancel()
 		log.Fatalf("[error] %+v", err)
 	}
 }

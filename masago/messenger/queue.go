@@ -24,10 +24,9 @@ func NewMessageQueue(key string, redisAddr string) *MessageQueue {
 }
 
 // Start starts the message queue
-func (mq *MessageQueue) Start() (err error) {
-	err = mq.queue.WaitForConnection()
-	if err != nil {
-		return
+func (mq *MessageQueue) Start() error {
+	if err := mq.queue.WaitForConnection(); err != nil {
+		return err
 	}
 
 	con := mq.queue.Pool.Get()
@@ -54,7 +53,7 @@ func (mq *MessageQueue) Start() (err error) {
 			log.Printf("[info] received message from queue: %s", data[1])
 		}
 	}()
-	return
+	return nil
 }
 
 // Stop stops message queue

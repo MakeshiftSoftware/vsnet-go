@@ -1,7 +1,6 @@
 package messenger
 
 import (
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -106,11 +105,10 @@ func (c *Client) Write() {
 }
 
 // sendMessage sends message through socket
-func (c *Client) sendMessage(msg *Message) (err error) {
-	var w io.WriteCloser
-	w, err = c.sock.NextWriter(websocket.BinaryMessage)
+func (c *Client) sendMessage(msg *Message) error {
+	w, err := c.sock.NextWriter(websocket.BinaryMessage)
 	if err != nil {
-		return
+		return err
 	}
 	w.Write(msg.data)
 
@@ -122,8 +120,7 @@ func (c *Client) sendMessage(msg *Message) (err error) {
 		w.Write(addMsg.data)
 	}
 
-	err = w.Close()
-	return
+	return w.Close()
 }
 
 // setReadDeadline sets read deadline for client
@@ -137,10 +134,12 @@ func (c *Client) setWriteDeadline() {
 }
 
 // serveWs handles websocket connection requests
-func serveWs(s *Service, w http.ResponseWriter, r *http.Request) (err error) {
-	var sock *websocket.Conn
-	if sock, err = upgrader.Upgrade(w, r, nil); err == nil {
-		s.hub.OnClientConnected(sock)
+func serveWs(s *Service, w http.ResponseWriter, r *http.Request) error {
+	sock, err := upgrader.Upgrade(w, r, nil)
+
+	if err != nil {
+		return err
 	}
-	return
+	s.hub.OnClientConnected(sock)
+	return nil
 }
