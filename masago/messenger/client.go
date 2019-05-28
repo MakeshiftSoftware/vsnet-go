@@ -1,11 +1,12 @@
 package messenger
 
 import (
+	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	uuid "github.com/satori/go.uuid"
 )
 
 // ClientID type
@@ -33,6 +34,7 @@ var upgrader = &websocket.Upgrader{
 // Client implementation
 type Client struct {
 	id       ClientID
+	session  string
 	hub      *Hub
 	sock     *websocket.Conn
 	outbound chan []byte
@@ -40,8 +42,11 @@ type Client struct {
 
 // NewClient creates a new client
 func NewClient(id ClientID, sock *websocket.Conn, hub *Hub) *Client {
+	log.Printf("[info] creating new client with id %d", id)
+
 	return &Client{
 		id:       id,
+		session:  uuid.NewV4().String(),
 		sock:     sock,
 		hub:      hub,
 		outbound: make(chan []byte, 256),
@@ -54,34 +59,32 @@ func (c *Client) Process() {
 	c.sock.SetReadDeadline(time.Now().Add(pongWait))
 	c.sock.SetPongHandler(c.setReadDeadline)
 
-	go func() {
-		defer func() {
-			c.hub.unregister <- c
-			c.sock.Close()
-		}()
-
-		var wg sync.WaitGroup
-		go c.Read(&wg)
-		go c.Write(&wg)
-		wg.Wait()
-	}()
+	go c.Read()
+	go c.Write()
 }
 
 // Read reads data from client socket
-func (c *Client) Read(wg *sync.WaitGroup) {
-	wg.Add(1)
-	defer wg.Done()
+func (c *Client) Read() {
+	defer func() {
+		c.hub.unregister <- c
+		c.sock.Close()
+	}()
 
 	for {
 		_, data, err := c.sock.ReadMessage()
 
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("[error] socket close error: %v", err)
+			}
+
 			break
 		}
 
 		msg, err := MessageFromBytes(data)
 
 		if err != nil {
+			log.Printf("[error] error processing data: %v", err)
 			break
 		}
 
@@ -91,13 +94,13 @@ func (c *Client) Read(wg *sync.WaitGroup) {
 }
 
 // Write writes data to client socket
-func (c *Client) Write(wg *sync.WaitGroup) {
-	wg.Add(1)
+func (c *Client) Write() {
 	ticker := time.NewTicker(pingPeriod)
 
 	defer func() {
 		ticker.Stop()
-		wg.Done()
+		c.hub.unregister <- c
+		c.sock.Close()
 	}()
 
 	for {
@@ -132,16 +135,6 @@ func (c *Client) send(data []byte) error {
 	}
 
 	w.Write(data)
-
-	// @TODO: figure out how to separate multiple binary messages in single send
-	// Combine queued messages with current message
-	// n := len(c.send)
-	// for i := 0; i < n; i++ {
-	// 	w.Write(newline)
-	// 	addMsg := <-c.send
-	// 	w.Write(addMsg.data)
-	// }
-
 	return w.Close()
 }
 
@@ -157,11 +150,15 @@ func (c *Client) setWriteDeadline() error {
 
 // serveWs handles websocket connection requests
 func serveWs(s *Service, w http.ResponseWriter, r *http.Request) error {
+	log.Print("[info] received ws connection request")
+
 	sock, err := upgrader.Upgrade(w, r, nil)
 
 	if err != nil {
 		return err
 	}
+
+	log.Print("[info] connection request upgraded")
 
 	s.hub.OnClientConnected(sock)
 	return nil

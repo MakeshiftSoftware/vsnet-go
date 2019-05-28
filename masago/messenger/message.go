@@ -44,11 +44,11 @@ type IMessage interface {
 
 // Message implementation
 type Message struct {
-	t  MessageType `msgpack:",omitempty"` // Message type
-	d  MessageData `msgpack:",omitempty"` // Message data
-	s  ClientID    `msgpack:",omitempty"` // Message sender
-	r  []ClientID  `msgpack:",omitempty"` // Message recipients
-	ts time.Time   `msgpack:",omitempty"` // Message timestamp
+	Type      MessageType `msgpack:"t,omitempty"`  // Message type
+	Data      MessageData `msgpack:"d,omitempty"`  // Message data
+	Sender    ClientID    `msgpack:"s,omitempty"`  // Message sender
+	Recipient []ClientID  `msgpack:"r,omitempty"`  // Message recipients
+	Timestamp time.Time   `msgpack:"ts,omitempty"` // Message timestamp
 }
 
 // MessageFromBytes creates a new message from raw bytes
@@ -66,9 +66,9 @@ func (msg *Message) GetBytes() (b MessageBytes, err error) {
 // GetOutbound gets message bytes for outbound delivery
 func (msg *Message) GetOutbound() (b MessageBytes, err error) {
 	out := &Message{
-		t: msg.GetType(),
-		d: msg.GetData(),
-		s: msg.GetSender(),
+		Type:   msg.GetType(),
+		Data:   msg.GetData(),
+		Sender: msg.GetSender(),
 	}
 
 	if _, ok := TimestampRequired[msg.GetType()]; ok {
@@ -81,50 +81,50 @@ func (msg *Message) GetOutbound() (b MessageBytes, err error) {
 
 // GetType gets message type
 func (msg *Message) GetType() MessageType {
-	return msg.t
+	return msg.Type
 }
 
 // SetType sets message type
 func (msg *Message) SetType(t MessageType) {
-	msg.t = t
+	msg.Type = t
 }
 
 // GetData gets message data
 func (msg *Message) GetData() MessageData {
-	return msg.d
+	return msg.Data
 }
 
 // SetData sets message data
 func (msg *Message) SetData(d MessageData) {
-	msg.d = d
+	msg.Data = d
 }
 
 // GetSender gets message sender
 func (msg *Message) GetSender() ClientID {
-	return msg.s
+	return msg.Sender
 }
 
 // SetSender sets message sender
 func (msg *Message) SetSender(s ClientID) {
-	msg.s = s
+	msg.Sender = s
 }
 
 // GetRecipients gets message recipient
 func (msg *Message) GetRecipients() []ClientID {
-	return msg.r
+	return msg.Recipient
 }
 
 // SetRecipients sets message recipient
 func (msg *Message) SetRecipients(r []ClientID) {
-	msg.r = r
+	msg.Recipient = r
 }
 
 // GetTimestamp gets message timestamp
 func (msg *Message) GetTimestamp() time.Time {
-	return msg.ts
+	return msg.Timestamp
 }
 
 // SetTimestamp sets message timestamp
 func (msg *Message) SetTimestamp() {
-	msg.ts = time.Now()
+	msg.Timestamp = time.Now()
 }

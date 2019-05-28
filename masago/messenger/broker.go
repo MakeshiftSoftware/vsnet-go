@@ -1,8 +1,6 @@
 package messenger
 
 import (
-	"log"
-
 	"github.com/garyburd/redigo/redis"
 	"github.com/hashicorp/go-multierror"
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
@@ -10,17 +8,18 @@ import (
 
 // Broker implementation
 type Broker struct {
-	key       string
-	redis     *predis.Client
-	onReceive func(msg *Message) error
-	quit      chan struct{}
+	key   string
+	redis *predis.Client
+	hub   *Hub
+	quit  chan struct{}
 }
 
 // NewBroker creates new broker
-func NewBroker(key string, redisAddr string, onReceive func(msg *Message) error) *Broker {
+func NewBroker(key string, redisAddr string, hub *Hub) *Broker {
 	return &Broker{
 		key:   key,
 		redis: predis.New(redisAddr),
+		hub:   hub,
 		quit:  make(chan struct{}),
 	}
 }
@@ -53,15 +52,13 @@ func (b *Broker) Start() error {
 				return
 			}
 
-			log.Printf("[info] broker received message: %s", data[1])
-
 			msg, err := MessageFromBytes(data[1])
 
 			if err != nil {
 				return
 			}
 
-			b.onReceive(msg)
+			b.hub.queue <- msg
 		}
 	}()
 
@@ -90,6 +87,6 @@ func (b *Broker) Ready() error {
 }
 
 // Send sends message
-func (b *Broker) Send(key PresenceLocation, data []byte) error {
+func (b *Broker) Send(key string, data []byte) error {
 	return b.redis.Rpush(key, data)
 }

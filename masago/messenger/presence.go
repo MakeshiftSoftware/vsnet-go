@@ -1,11 +1,9 @@
 package messenger
 
 import (
+	"github.com/garyburd/redigo/redis"
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
 )
-
-// PresenceLocation type
-type PresenceLocation string
 
 // PresenceRedisField type
 type PresenceRedisField string
@@ -80,29 +78,29 @@ func (p *Presence) RemoveMulti(ids []ClientID) error {
 }
 
 // Locate locates clients by id
-func (p *Presence) Locate(clients []ClientID) (map[PresenceLocation][]ClientID, error) {
+func (p *Presence) Locate(clients []ClientID) (map[string][]ClientID, error) {
 	con := p.redis.Pool.Get()
 	defer con.Close()
 
-	locations := make(map[PresenceLocation][]ClientID)
+	locations := make(map[string][]ClientID)
 
 	if err := con.Send("MULTI"); err != nil {
 		return locations, err
 	}
 
-	for client := range clients {
+	for _, client := range clients {
 		if err := con.Send("HGET", client, LocationField); err != nil {
 			return locations, err
 		}
 	}
 
-	result, err := con.Do("EXEC")
+	result, err := redis.Strings(con.Do("EXEC"))
 
 	if err != nil {
 		return locations, err
 	}
 
-	for i, location := range result.([]PresenceLocation) {
+	for i, location := range result {
 		locations[location] = append(locations[location], clients[i])
 	}
 

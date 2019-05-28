@@ -11,6 +11,7 @@ import (
 type Hub struct {
 	clients    map[ClientID]*Client
 	inbound    chan *Message
+	queue      chan *Message
 	register   chan *Client
 	unregister chan *Client
 	broker     *Broker
@@ -22,12 +23,13 @@ func NewHub(name string, brokerAddr string, presenceAddr string) *Hub {
 	h := &Hub{
 		clients:    make(map[ClientID]*Client),
 		inbound:    make(chan *Message),
+		queue:      make(chan *Message),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		presence:   NewPresence(name, presenceAddr),
 	}
 
-	h.broker = NewBroker(name, brokerAddr, h.send)
+	h.broker = NewBroker(name, brokerAddr, h)
 	return h
 }
 
@@ -52,6 +54,8 @@ func (h *Hub) Start() error {
 				h.unregisterClient(client)
 			case msg := <-h.inbound:
 				h.broadcast(msg)
+			case msg := <-h.queue:
+				h.send(msg)
 			}
 		}
 	}()
@@ -69,7 +73,9 @@ func (h *Hub) Stop() (result error) {
 	ids := make([]ClientID, len(h.clients))
 	i := 0
 
-	for id := range h.clients {
+	for id, client := range h.clients {
+		close(client.outbound)
+		client.sock.Close()
 		ids[i] = id
 		i++
 	}
@@ -99,10 +105,17 @@ func (h *Hub) Ready() (result error) {
 }
 
 // OnClientConnected occurs when a new client connection is accepted
-func (h *Hub) OnClientConnected(sock *websocket.Conn) {
-	c := NewClient(1234, sock, h)
+func (h *Hub) OnClientConnected(sock *websocket.Conn) error {
+	var id ClientID = 1234
+	c := NewClient(id, sock, h)
+
+	if err := h.presence.Add(c.id); err != nil {
+		return err
+	}
+
 	h.register <- c
 	c.Process()
+	return nil
 }
 
 // registerClient registers client to hub
@@ -112,7 +125,11 @@ func (h *Hub) registerClient(c *Client) {
 
 // unregisterClient unregisters client from hub
 func (h *Hub) unregisterClient(c *Client) {
-	delete(h.clients, c.id)
+	client, ok := h.clients[c.id]
+
+	if ok && client.session == c.session {
+		delete(h.clients, c.id)
+	}
 }
 
 // broadcast distributes message with broker
