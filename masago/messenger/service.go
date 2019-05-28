@@ -9,20 +9,19 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/makeshiftsoftware/vsnet/masago/config"
 	"github.com/makeshiftsoftware/vsnet/pkg/cleanup"
-	"github.com/makeshiftsoftware/vsnet/pkg/registrar"
 	uuid "github.com/satori/go.uuid"
 )
 
 // Service implementation
 type Service struct {
-	context   context.Context      // Context for the service
-	cancel    context.CancelFunc   // Cancellation function
-	wg        sync.WaitGroup       // Wait group
-	Config    *config.Config       // Server configuration
-	name      string               // Unique server name
-	http      *http.Server         // Underlying HTTP server
-	hub       *Hub                 // Hub service
-	registrar *registrar.Registrar // Registrar service
+	context   context.Context    // Context for the service
+	cancel    context.CancelFunc // Cancellation function
+	wg        sync.WaitGroup     // Wait group
+	Config    *config.Config     // Server configuration
+	name      string             // Unique server name
+	http      *http.Server       // Underlying HTTP server
+	hub       *Hub               // Hub service
+	registrar *Registrar         // Registrar service
 }
 
 type handler func(*Service, http.ResponseWriter, *http.Request) error
@@ -32,8 +31,8 @@ func NewService(cfg *config.Config) (s *Service) {
 	ctx, cancel := context.WithCancel(context.Background())
 	name := cfg.RedisServerPrefix + uuid.NewV4().String()
 
-	hubService := NewHub(name, cfg.RedisBrokerAddr)
-	registrarService := registrar.New(name, cfg.ExternalIP, cfg.Port, cfg.RedisRegistrarAddr)
+	hubService := NewHub(name, cfg.RedisBrokerAddr, cfg.RedisPresenceAddr)
+	registrarService := NewRegistrar(name, cfg.ExternalIP, cfg.Port, cfg.RedisRegistrarAddr)
 
 	s = &Service{
 		context:   ctx,
@@ -57,7 +56,8 @@ func NewService(cfg *config.Config) (s *Service) {
 
 // Start starts the service
 func (s *Service) Start() error {
-	log.Printf("[info] starting service")
+	log.Print("[info] starting service...")
+
 	cleanup.Listen(s.cancel, &s.wg)
 	cleanup.Add(s.context, &s.wg, s.hub.Stop)
 	cleanup.Add(s.context, &s.wg, s.registrar.Stop)
@@ -73,20 +73,24 @@ func (s *Service) Start() error {
 	return s.http.ListenAndServe()
 }
 
-// Cancel cancel service context and wait for cleanup
+// Cancel cancels service context and waits for cleanup
 func (s *Service) Cancel() {
-	log.Printf("[info] stopping service")
+	log.Print("[info] stopping service")
+
 	s.cancel()
 	s.wg.Wait()
 }
 
+// healthcheck performs service healthcheck
 func healthcheck(s *Service, w http.ResponseWriter, r *http.Request) error {
 	if err := s.registrar.Ready(); err != nil {
 		return err
 	}
+
 	if err := s.hub.Ready(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -95,7 +99,7 @@ func (s *Service) wrapMiddleware(h handler) http.HandlerFunc {
 		err := h(s, w, r)
 
 		if err != nil {
-			log.Printf("[Error] %+v", err)
+			log.Printf("[error] %+v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}

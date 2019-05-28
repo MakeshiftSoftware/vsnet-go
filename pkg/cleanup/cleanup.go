@@ -10,14 +10,17 @@ import (
 )
 
 // Add queues a cleanup function to run when context is cancelled
-func Add(ctx context.Context, wg *sync.WaitGroup, cleanupFunc func()) {
+func Add(ctx context.Context, wg *sync.WaitGroup, cleanupFunc func() error) {
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
 		select {
 		case <-ctx.Done():
-			cleanupFunc()
+			if err := cleanupFunc(); err != nil {
+				log.Printf("[error] error during cleanup: %v", err)
+			}
+
 			return
 		}
 	}()

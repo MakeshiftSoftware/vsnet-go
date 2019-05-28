@@ -10,6 +10,7 @@ const (
 	envMaxMessageSize     = "MAX_MESSAGE_SIZE"
 	envRedisBrokerAddr    = "REDIS_BROKER_ADDR"
 	envRedisRegistrarAddr = "REDIS_REGISTRAR_ADDR"
+	envRedisPresenceAddr  = "REDIS_PRESENCE_ADDR"
 	envRedisServerPrefix  = "REDIS_SERVER_PREFIX"
 )
 
@@ -21,6 +22,7 @@ var defaults = map[string]interface{}{
 	(envMaxMessageSize):     512,
 	(envRedisBrokerAddr):    ":6379",
 	(envRedisRegistrarAddr): ":6380",
+	(envRedisPresenceAddr):  ":6381",
 	(envRedisServerPrefix):  "Server:",
 }
 
@@ -33,6 +35,7 @@ type Config struct {
 	MaxMessageSize     int64
 	RedisBrokerAddr    string
 	RedisRegistrarAddr string
+	RedisPresenceAddr  string
 	RedisServerPrefix  string
 }
 
@@ -43,6 +46,7 @@ func New() *Config {
 	for key, value := range defaults {
 		v.SetDefault(key, value)
 	}
+
 	v.AutomaticEnv()
 
 	return &Config{
@@ -53,6 +57,7 @@ func New() *Config {
 		MaxMessageSize:     v.GetInt64(envMaxMessageSize),
 		RedisBrokerAddr:    v.GetString(envRedisBrokerAddr),
 		RedisRegistrarAddr: v.GetString(envRedisRegistrarAddr),
+		RedisPresenceAddr:  v.GetString(envRedisPresenceAddr),
 		RedisServerPrefix:  v.GetString(envRedisServerPrefix),
 	}
 }

@@ -1,32 +1,45 @@
 package messenger
 
 import (
+	"log"
+
 	"github.com/gorilla/websocket"
+	"github.com/hashicorp/go-multierror"
 )
 
 // Hub implementation
 type Hub struct {
-	clients    map[string]*Client
+	clients    map[ClientID]*Client
 	inbound    chan *Message
 	register   chan *Client
 	unregister chan *Client
-	queue      *MessageQueue
+	broker     *Broker
+	presence   *Presence
 }
 
-// NewHub creates a new hub
-func NewHub(name string, redisAddr string) *Hub {
-	return &Hub{
-		clients:    make(map[string]*Client),
+// NewHub creates new hub
+func NewHub(name string, brokerAddr string, presenceAddr string) *Hub {
+	h := &Hub{
+		clients:    make(map[ClientID]*Client),
 		inbound:    make(chan *Message),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		queue:      NewMessageQueue(name, redisAddr),
+		presence:   NewPresence(name, presenceAddr),
 	}
+
+	h.broker = NewBroker(name, brokerAddr, h.send)
+	return h
 }
 
-// Start starts the hub
+// Start starts hub
 func (h *Hub) Start() error {
-	if err := h.queue.Start(); err != nil {
+	log.Print("[info] starting hub...")
+
+	if err := h.broker.Start(); err != nil {
+		return err
+	}
+
+	if err := h.presence.Start(); err != nil {
 		return err
 	}
 
@@ -38,26 +51,56 @@ func (h *Hub) Start() error {
 			case client := <-h.unregister:
 				h.unregisterClient(client)
 			case msg := <-h.inbound:
-				h.relayMessage(msg)
+				h.broadcast(msg)
 			}
 		}
 	}()
+
+	log.Print("[info] hub started")
 	return nil
 }
 
-// Stop stops the hub
-func (h *Hub) Stop() {
-	h.queue.Stop()
+// Stop stops hub
+func (h *Hub) Stop() (result error) {
+	if err := h.broker.Stop(); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	ids := make([]ClientID, len(h.clients))
+	i := 0
+
+	for id := range h.clients {
+		ids[i] = id
+		i++
+	}
+
+	if err := h.presence.RemoveMulti(ids); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	if err := h.presence.Stop(); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	return
 }
 
 // Ready checks if hub is ready
-func (h *Hub) Ready() error {
-	return h.queue.Ready()
+func (h *Hub) Ready() (result error) {
+	if err := h.broker.Ready(); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	if err := h.presence.Ready(); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	return
 }
 
 // OnClientConnected occurs when a new client connection is accepted
 func (h *Hub) OnClientConnected(sock *websocket.Conn) {
-	c := NewClient("abcde", sock, h)
+	c := NewClient(1234, sock, h)
 	h.register <- c
 	c.Process()
 }
@@ -72,14 +115,49 @@ func (h *Hub) unregisterClient(c *Client) {
 	delete(h.clients, c.id)
 }
 
-// relayMessage relays message to hub
-func (h *Hub) relayMessage(msg *Message) {
-	for _, client := range h.clients {
-		select {
-		case client.send <- msg:
-		default:
-			close(client.send)
-			delete(h.clients, client.id)
+// broadcast distributes message with broker
+func (h *Hub) broadcast(msg *Message) error {
+	locations, err := h.presence.Locate(msg.GetRecipients())
+
+	if err != nil {
+		return err
+	}
+
+	for location, members := range locations {
+		msg.SetRecipients(members)
+
+		data, err := msg.GetBytes()
+
+		if err != nil {
+			continue
+		}
+
+		h.broker.Send(location, data)
+	}
+
+	return nil
+}
+
+// send sends message to recipients
+func (h *Hub) send(msg *Message) error {
+	data, err := msg.GetOutbound()
+
+	if err != nil {
+		return err
+	}
+
+	for _, id := range msg.GetRecipients() {
+		client, ok := h.clients[id]
+
+		if ok {
+			select {
+			case client.outbound <- data:
+			default:
+				close(client.outbound)
+				delete(h.clients, client.id)
+			}
 		}
 	}
+
+	return nil
 }
