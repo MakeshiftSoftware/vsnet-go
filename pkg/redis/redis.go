@@ -16,13 +16,13 @@ type Client struct {
 func New(addr string) *Client {
 	return &Client{
 		Pool: &redis.Pool{
-			MaxIdle:     3,
+			MaxIdle:     10,
 			IdleTimeout: 240 * time.Second,
 			Dial: func() (redis.Conn, error) {
 				return redis.Dial("tcp", addr)
 			},
-			TestOnBorrow: func(c redis.Conn, t time.Time) error {
-				_, err := c.Do("PING")
+			TestOnBorrow: func(conn redis.Conn, t time.Time) error {
+				_, err := conn.Do("PING")
 				return err
 			},
 		},
@@ -44,119 +44,153 @@ func (c *Client) Close() error {
 
 // Ping pings redis
 func (c *Client) Ping() error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("PING")
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("PING")
 	return err
 }
 
-// GetString gets value of key as a string
-func (c *Client) GetString(key interface{}) (string, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.String(con.Do("GET", key))
-}
-
-// GetInt gets value of key as an int64
-func (c *Client) GetInt(key interface{}) (int64, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Int64(con.Do("GET", key))
-}
-
-// GetBool gets value of key as a bool
-func (c *Client) GetBool(key interface{}) (bool, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Bool(con.Do("GET", key))
+// Get gets value of key
+func (c *Client) Get(key interface{}) (interface{}, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return conn.Do("GET", key)
 }
 
 // Set sets key to value
-func (c *Client) Set(key interface{}, value interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("SET", key, value)
+func (c *Client) Set(args ...interface{}) (bool, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	res, err := conn.Do("SET", args...)
+	return res == "OK", err
+}
+
+// Delete deletes key
+func (c *Client) Delete(key interface{}) error {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("DEL", key)
 	return err
 }
 
 // Exists checks if key exists
 func (c *Client) Exists(key interface{}) (bool, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Bool(con.Do("EXISTS", key))
-}
-
-// Delete deletes key
-func (c *Client) Delete(key interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("DEL", key)
-	return err
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Bool(conn.Do("EXISTS", key))
 }
 
 // Incr increments key
 func (c *Client) Incr(key interface{}) (int, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Int(con.Do("INCR", key))
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Int(conn.Do("INCR", key))
+}
+
+// Incrby increments key by amount
+func (c *Client) Incrby(key interface{}, amount int) (int, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Int(conn.Do("INCRBY", key, amount))
+}
+
+// Expire expires key in seconds
+func (c *Client) Expire(key interface{}, time int) (bool, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Bool(conn.Do("EXPIRE", key, time))
+}
+
+// Pexpire expires key in milliseconds
+func (c *Client) Pexpire(key interface{}, time int) (bool, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Bool(conn.Do("PEXPIRE", key, time))
+}
+
+// Hget get field value of hash at key
+func (c *Client) Hget(key interface{}, field interface{}) (interface{}, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return conn.Do("HGET", key, field)
 }
 
 // Hset sets field in the hash stored at key to value
 func (c *Client) Hset(key interface{}, field interface{}, value interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("HSET", key, field, value)
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("HSET", key, field, value)
 	return err
 }
 
-// Hmset sets the specified fields to their respective values in the hash stored at key
-func (c *Client) Hmset(args []interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("HMSET", args...)
-	return err
-}
-
-// HgetString get field of hash stored at key as string
-func (c *Client) HgetString(key interface{}, field interface{}) (string, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.String(con.Do("HGET", key, field))
-}
-
-// HgetInt get field of hash stored at key as int
-func (c *Client) HgetInt(key interface{}, field interface{}) (int, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Int(con.Do("HGET", key, field))
+// Hincrby increments field of hash stored at key by amount
+func (c *Client) Hincrby(key interface{}, field interface{}, amount int32) (interface{}, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return conn.Do("HINCRBY", key, field, amount)
 }
 
 // Hgetall get all fields and values of the hash stored at key
 func (c *Client) Hgetall(key interface{}) ([]interface{}, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return redis.Values(con.Do("HGETALL", key))
+	conn := c.Pool.Get()
+	defer conn.Close()
+	return redis.Values(conn.Do("HGETALL", key))
 }
 
-// Hincrby increments field of hash stored at key by amount
-func (c *Client) Hincrby(key interface{}, field interface{}, amount uint32) (interface{}, error) {
-	con := c.Pool.Get()
-	defer con.Close()
-	return con.Do("HINCRBY", key, field, amount)
-}
-
-// Rpush right pushes into list
-func (c *Client) Rpush(key interface{}, data interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("RPUSH", key, data)
+// Hmset sets the specified fields to their respective values in the hash stored at key
+func (c *Client) Hmset(args ...interface{}) error {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("HMSET", args...)
 	return err
 }
 
-// Lpush left pushes into list
-func (c *Client) Lpush(key interface{}, data interface{}) error {
-	con := c.Pool.Get()
-	defer con.Close()
-	_, err := con.Do("LPUSH", key, data)
+// Rpush right pushes value into list
+func (c *Client) Rpush(key interface{}, value interface{}) error {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("RPUSH", key, value)
 	return err
+}
+
+// Lpush left pushes value into list
+func (c *Client) Lpush(key interface{}, value interface{}) error {
+	conn := c.Pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("LPUSH", key, value)
+	return err
+}
+
+// GetKeys get all keys that match pattern
+func (c *Client) GetKeys(pattern string) ([]string, error) {
+	conn := c.Pool.Get()
+	defer conn.Close()
+
+	iter := 0
+	keys := []string{}
+	included := map[string]bool{}
+
+	for {
+		arr, err := redis.Values(conn.Do("SCAN", iter, "MATCH", pattern))
+
+		if err != nil {
+			return keys, err
+		}
+
+		iter, _ = redis.Int(arr[0], nil)
+		k, _ := redis.Strings(arr[1], nil)
+
+		for _, s := range k {
+			if !included[s] {
+				included[s] = true
+				keys = append(keys, s)
+			}
+		}
+
+		if iter == 0 {
+			break
+		}
+	}
+
+	return keys, nil
 }

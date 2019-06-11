@@ -1,4 +1,4 @@
-package messenger
+package node
 
 import (
 	"log"
@@ -8,9 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 	uuid "github.com/satori/go.uuid"
 )
-
-// ClientID type
-type ClientID uint64
 
 const (
 	readBufferSize   = 1024                // Size (bytes) of the read buffer
@@ -22,9 +19,7 @@ const (
 	closeGracePeriod = 10 * time.Second    // Time to wait before force close a connection
 )
 
-var newline = []byte{'\n'}
-
-// Default upgrader to upgrade connections
+// Upgrader default request upgrader
 var upgrader = &websocket.Upgrader{
 	ReadBufferSize:  readBufferSize,
 	WriteBufferSize: writeBufferSize,
@@ -33,40 +28,37 @@ var upgrader = &websocket.Upgrader{
 
 // Client implementation
 type Client struct {
-	id       ClientID
-	session  string
-	hub      *Hub
-	sock     *websocket.Conn
-	outbound chan []byte
+	sess      string          // Unique session ID
+	id        string          // Unique client ID
+	hub       *Hub            // Node hub
+	sock      *websocket.Conn // Underlying socket connection
+	outboundc chan []byte     // Client outbound message channel
 }
 
-// NewClient creates a new client
-func NewClient(id ClientID, sock *websocket.Conn, hub *Hub) *Client {
-	log.Printf("[info] creating new client with id %d", id)
-
+// newClient creates a new client
+func newClient(id string, hub *Hub, sock *websocket.Conn) *Client {
 	return &Client{
-		id:       id,
-		session:  uuid.NewV4().String(),
-		sock:     sock,
-		hub:      hub,
-		outbound: make(chan []byte, 256),
+		sess:      uuid.NewV4().String(),
+		id:        id,
+		hub:       hub,
+		sock:      sock,
+		outboundc: make(chan []byte, 256),
 	}
 }
 
-// Process processes a client
-func (c *Client) Process() {
+// process processes a client
+func (c *Client) process() {
 	c.sock.SetReadLimit(maxMessageSize)
 	c.sock.SetReadDeadline(time.Now().Add(pongWait))
 	c.sock.SetPongHandler(c.setReadDeadline)
-
-	go c.Read()
-	go c.Write()
+	go c.read()
+	go c.write()
 }
 
-// Read reads data from client socket
-func (c *Client) Read() {
+// read reads data from client socket
+func (c *Client) read() {
 	defer func() {
-		c.hub.unregister <- c
+		c.hub.unregisterc <- c
 		c.sock.Close()
 	}()
 
@@ -74,38 +66,34 @@ func (c *Client) Read() {
 		_, data, err := c.sock.ReadMessage()
 
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[error] socket close error: %v", err)
-			}
-
-			break
+			return
 		}
 
 		msg, err := MessageFromBytes(data)
 
 		if err != nil {
 			log.Printf("[error] error processing data: %v", err)
-			break
+			return
 		}
 
 		msg.SetSender(c.id)
-		c.hub.inbound <- msg
+		c.hub.inboundc <- msg
 	}
 }
 
-// Write writes data to client socket
-func (c *Client) Write() {
+// write writes data to client socket
+func (c *Client) write() {
 	ticker := time.NewTicker(pingPeriod)
 
 	defer func() {
 		ticker.Stop()
-		c.hub.unregister <- c
+		c.hub.unregisterc <- c
 		c.sock.Close()
 	}()
 
 	for {
 		select {
-		case data, ok := <-c.outbound:
+		case data, ok := <-c.outboundc:
 			c.setWriteDeadline()
 
 			if !ok {
@@ -126,7 +114,7 @@ func (c *Client) Write() {
 	}
 }
 
-// sendMessage sends data through socket
+// send sends data through socket
 func (c *Client) send(data []byte) error {
 	w, err := c.sock.NextWriter(websocket.BinaryMessage)
 
@@ -135,6 +123,7 @@ func (c *Client) send(data []byte) error {
 	}
 
 	w.Write(data)
+
 	return w.Close()
 }
 
@@ -146,20 +135,4 @@ func (c *Client) setReadDeadline(string) error {
 // setWriteDeadline sets write deadline for client
 func (c *Client) setWriteDeadline() error {
 	return c.sock.SetWriteDeadline(time.Now().Add(writeWait))
-}
-
-// serveWs handles websocket connection requests
-func serveWs(s *Service, w http.ResponseWriter, r *http.Request) error {
-	log.Print("[info] received ws connection request")
-
-	sock, err := upgrader.Upgrade(w, r, nil)
-
-	if err != nil {
-		return err
-	}
-
-	log.Print("[info] connection request upgraded")
-
-	s.hub.OnClientConnected(sock)
-	return nil
 }
