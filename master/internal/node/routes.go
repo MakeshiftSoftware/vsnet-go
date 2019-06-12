@@ -79,8 +79,8 @@ func sendMessageHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return n.sendMessage(mux.Vars(r)["id"], b)
 }
 
-// broadcastHandler http handler to broadcast message to all minions
-func broadcastHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
+// broadcastMessageHandler http handler to broadcast message to all minions
+func broadcastMessageHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 
@@ -88,5 +88,5 @@ func broadcastHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return n.broadcast(b)
+	return n.broadcastMessage(b)
 }

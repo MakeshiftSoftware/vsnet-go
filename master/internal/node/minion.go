@@ -10,10 +10,10 @@ import (
 
 const (
 	minionPrefix  = "minion:"
-	messagePrefix = "message:"
+	messagePrefix = "master:"
 )
 
-// ErrMinionNotFound is returned when the Minion can't be found in redis
+// ErrMinionNotFound is returned when the minion is not found in redis
 var ErrMinionNotFound = errors.New("could not find the requested minion")
 
 // Minion implementation
@@ -108,8 +108,8 @@ func (n *Node) sendMessage(id string, data []byte) error {
 	return n.redis.Rpush(messagePrefix+id, data)
 }
 
-// broadcast broadcasts message to all minions
-func (n *Node) broadcast(data []byte) (err error) {
+// broadcastMessage broadcasts message to all minions
+func (n *Node) broadcastMessage(data []byte) (err error) {
 	conn := n.redis.Pool.Get()
 	defer conn.Close()
 

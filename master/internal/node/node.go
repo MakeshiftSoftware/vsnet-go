@@ -24,11 +24,11 @@ const (
 // Node implementation
 type Node struct {
 	sync.RWMutex
-	once     sync.Once      // Once object
-	wg       sync.WaitGroup // Task wait group
+	once     sync.Once
+	wg       sync.WaitGroup
 	cfg      *config.Config // Node config
 	master   bool           // Node is master
-	http     *http.Server   // Underlying HTTP server
+	http     *http.Server   // HTTP server
 	redis    *predis.Client // Redis client
 	quitc    chan os.Signal // Quit channel
 	cleanupc chan struct{}  // Cleanup channel
@@ -149,6 +149,7 @@ func (n *Node) maintain() bool {
 // initServer initialize http server
 func (n *Node) initServer() {
 	r := mux.NewRouter()
+
 	r.HandleFunc("/healthz", n.wrapMiddleware(healthcheckHandler)).Methods("GET")
 	r.HandleFunc("/minions", n.wrapMiddleware(getMinionsHandler)).Methods("GET")
 	r.HandleFunc("/minions/{id}", n.wrapMiddleware(getMinionHandler)).Methods("GET")

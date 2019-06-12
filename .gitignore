@@ -19,5 +19,8 @@ config.test.yml
 coverage.html
 cover.out
 
+# Dumps
+dump.rdb
+
 # Misc
 .DS_Store
