@@ -9,10 +9,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Custom http handler func
+// handler represents a custom http route handler function.
 type handler func(*Node, http.ResponseWriter, *http.Request) error
 
-// wrapMiddleware wraps http handler func
+// wrapMiddleware wraps a custom http handler function and returns a handler function
+// in the format that is expected by the http server.
 func (n *Node) wrapMiddleware(h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := h(n, w, r)
@@ -24,12 +25,12 @@ func (n *Node) wrapMiddleware(h handler) http.HandlerFunc {
 	}
 }
 
-// healthcheckHandler http handler to perform node healthcheck
+// healthcheckHandler is an http handler function that performs a node healthcheck.
 func healthcheckHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return n.redis.Ping()
 }
 
-// getMinionsHandler http handler to get all minions
+// getMinionsHandler is an http handler function that retrieves all active minions.
 func getMinionsHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	var minions []Minion
 	var res []byte
@@ -48,7 +49,7 @@ func getMinionsHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
-// getMinionHandler http handler to get minion by id
+// getMinionHandler is an http handler function that retrieves a minion by its id.
 func getMinionHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	var minion Minion
 	var res []byte
@@ -67,7 +68,7 @@ func getMinionHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
-// sendMessageHandler http handler to send message to a minion
+// sendMessageHandler is an http handler function that sends a message to a specific minion by its id.
 func sendMessageHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -79,7 +80,7 @@ func sendMessageHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return n.sendMessage(mux.Vars(r)["id"], b)
 }
 
-// broadcastMessageHandler http handler to broadcast message to all minions
+// broadcastMessageHandler is an http handler function that broadcasts a message to all active minions.
 func broadcastMessageHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()

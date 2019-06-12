@@ -34,7 +34,7 @@ type Node struct {
 	cleanupc chan struct{}  // Cleanup channel
 }
 
-// New creates new node
+// New creates a new node.
 func New(cfg *config.Config) *Node {
 	n := &Node{
 		cfg:      cfg,
@@ -49,7 +49,7 @@ func New(cfg *config.Config) *Node {
 	return n
 }
 
-// Start starts node
+// Start starts the node.
 func (n *Node) Start() error {
 	log.Print("[info] starting node...")
 
@@ -71,7 +71,7 @@ func (n *Node) Start() error {
 	return n.http.ListenAndServe()
 }
 
-// Cleanup disposes of node resources
+// Cleanup disposes of node resources to exit gracefully.
 func (n *Node) Cleanup() {
 	n.once.Do(func() {
 		log.Print("[info] cleaning up...")
@@ -87,7 +87,8 @@ func (n *Node) Cleanup() {
 	})
 }
 
-// upgrade attempts to upgrade leader node to master node
+// upgrade attempts to upgrade node to a master node by acquiring the master lock.
+// The lock is acquired if the node successfully sets the master key value in redis.
 func (n *Node) upgrade() bool {
 	n.Lock()
 	defer n.Unlock()
@@ -118,7 +119,9 @@ func (n *Node) upgrade() bool {
 	return false
 }
 
-// maintain maintains control of master lock
+// maintain maintains control of master lock by extending the master key's expiration time.
+// If the node goes down, the master key will eventually expire and become available to other
+// nodes to acquire.
 func (n *Node) maintain() bool {
 	n.Lock()
 	defer n.Unlock()
@@ -146,7 +149,7 @@ func (n *Node) maintain() bool {
 	return false
 }
 
-// initServer initialize http server
+// initServer initializes the http server for the node.
 func (n *Node) initServer() {
 	r := mux.NewRouter()
 

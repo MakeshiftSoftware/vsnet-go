@@ -13,7 +13,7 @@ const (
 	messagePrefix = "master:"
 )
 
-// ErrMinionNotFound is returned when the minion is not found in redis
+// ErrMinionNotFound is returned when the minion is not found in redis.
 var ErrMinionNotFound = errors.New("could not find the requested minion")
 
 // Minion implementation
@@ -24,12 +24,12 @@ type Minion struct {
 	Connections uint64 `redis:"connections" json:"connections"` // Minion connections count
 }
 
-// getMinionKeys get all minion keys
+// getMinionKeys retrieves all keys for active minions in redis.
 func (n *Node) getMinionKeys() ([]string, error) {
 	return n.redis.GetKeys(minionPrefix + "*")
 }
 
-// getMinions get all minions
+// getMinions retrieves all active minions from redis.
 func (n *Node) getMinions() (result []Minion, err error) {
 	conn := n.redis.Pool.Get()
 	defer conn.Close()
@@ -75,7 +75,7 @@ func (n *Node) getMinions() (result []Minion, err error) {
 	return result, nil
 }
 
-// getMinion gets minion by id
+// getMinion retrieves a minion by its id.
 func (n *Node) getMinion(id string) (result Minion, err error) {
 	values, err := redis.Values(n.redis.Hgetall(minionPrefix + id))
 
@@ -92,7 +92,7 @@ func (n *Node) getMinion(id string) (result Minion, err error) {
 	return result, err
 }
 
-// sendMessage send message to minion by id
+// sendMessage sends a message to a specific minion by its id.
 func (n *Node) sendMessage(id string, data []byte) error {
 	ok, err := n.redis.Exists(minionPrefix + id)
 
@@ -108,7 +108,7 @@ func (n *Node) sendMessage(id string, data []byte) error {
 	return n.redis.Rpush(messagePrefix+id, data)
 }
 
-// broadcastMessage broadcasts message to all minions
+// broadcastMessage broadcasts a message to all active minions.
 func (n *Node) broadcastMessage(data []byte) (err error) {
 	conn := n.redis.Pool.Get()
 	defer conn.Close()

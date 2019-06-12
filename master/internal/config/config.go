@@ -18,12 +18,12 @@ var defaults = map[string]interface{}{
 
 // Config implementation
 type Config struct {
-	Port           string // Master port
-	MaxConnections uint64 // Max connections per minion
+	Port           string // Node port
+	MaxConnections uint64 // Max connections allowed per minion
 	RedisAddr      string // Redis connection string
 }
 
-// New creates a new config
+// New creates a new node config.
 func New() *Config {
 	v := viper.New()
 
