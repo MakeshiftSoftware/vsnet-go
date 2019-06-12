@@ -16,8 +16,8 @@ const (
 // ErrMinionNotFound is returned when the minion is not found in redis.
 var ErrMinionNotFound = errors.New("could not find the requested minion")
 
-// Minion implementation
-type Minion struct {
+// minion implementation
+type minion struct {
 	ID          string `redis:"id" json:"id"`                   // Minion ID
 	IP          string `redis:"ip" json:"ip"`                   // Minion external IP
 	Port        string `redis:"port" json:"port"`               // Minion port
@@ -25,12 +25,12 @@ type Minion struct {
 }
 
 // getMinionKeys retrieves all keys for active minions in redis.
-func (n *Node) getMinionKeys() ([]string, error) {
+func (n *node) getMinionKeys() ([]string, error) {
 	return n.redis.GetKeys(minionPrefix + "*")
 }
 
 // getMinions retrieves all active minions from redis.
-func (n *Node) getMinions() (result []Minion, err error) {
+func (n *node) getMinions() (result []minion, err error) {
 	conn := n.redis.Pool.Get()
 	defer conn.Close()
 
@@ -59,7 +59,7 @@ func (n *Node) getMinions() (result []Minion, err error) {
 	}
 
 	for _, val := range values {
-		var m Minion
+		var m minion
 
 		if len(val.([]interface{})) == 0 {
 			return result, ErrMinionNotFound
@@ -76,7 +76,7 @@ func (n *Node) getMinions() (result []Minion, err error) {
 }
 
 // getMinion retrieves a minion by its id.
-func (n *Node) getMinion(id string) (result Minion, err error) {
+func (n *node) getMinion(id string) (result minion, err error) {
 	values, err := redis.Values(n.redis.Hgetall(minionPrefix + id))
 
 	if err != nil {
@@ -93,7 +93,7 @@ func (n *Node) getMinion(id string) (result Minion, err error) {
 }
 
 // sendMessage sends a message to a specific minion by its id.
-func (n *Node) sendMessage(id string, data []byte) error {
+func (n *node) sendMessage(id string, data []byte) error {
 	ok, err := n.redis.Exists(minionPrefix + id)
 
 	if err != nil {
@@ -109,7 +109,7 @@ func (n *Node) sendMessage(id string, data []byte) error {
 }
 
 // broadcastMessage broadcasts a message to all active minions.
-func (n *Node) broadcastMessage(data []byte) (err error) {
+func (n *node) broadcastMessage(data []byte) (err error) {
 	conn := n.redis.Pool.Get()
 	defer conn.Close()
 

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	nodePrefix         = "minion:"       // Prefix for minion in redis
+	nodePrefix         = "minion:"       // Prefix for minion node in redis
 	checkinPeriod      = 5 * time.Second // Keep node alive with this period
 	nodeKeyExpires     = 10              // Time (in seconds) to expire node key
 	nodeIPKey          = "ip"            // Key used to store Node IP
@@ -25,25 +25,25 @@ const (
 	nodeConnectionsKey = "connections"   // Key used to store Node connections count
 )
 
-// ErrMinionNotFound is returned when the Minion can't be found in redis
-var ErrMinionNotFound = errors.New("could not find minion in registry")
+// ErrMinionNotFound is returned when the minion is not found in redis.
+var ErrMinionNotFound = errors.New("could not find the requested minion")
 
-// Node implementation
-type Node struct {
-	once     sync.Once      // Once object
-	wg       sync.WaitGroup // Task wait group
+// node implementation
+type node struct {
+	once     sync.Once
+	wg       sync.WaitGroup
 	cfg      *config.Config // Node config
 	id       string         // Node ID
 	redis    *predis.Client // Redis client
-	http     *http.Server   // Underlying HTTP server
-	hub      *Hub           // Node hub
+	http     *http.Server   // HTTP server
+	hub      *hub           // Node hub
 	quitc    chan os.Signal // Quit channel
 	cleanupc chan struct{}  // Cleanup channel
 }
 
-// New creates new node
-func New(cfg *config.Config) *Node {
-	n := &Node{
+// New creates a new node.
+func New(cfg *config.Config) *node {
+	n := &node{
 		cfg:      cfg,
 		id:       uuid.NewV4().String(),
 		redis:    predis.New(cfg.RedisAddr),
@@ -58,8 +58,8 @@ func New(cfg *config.Config) *Node {
 	return n
 }
 
-// Start starts node
-func (n *Node) Start() error {
+// Start starts the node.
+func (n *node) Start() error {
 	log.Print("[info] starting node...")
 
 	// Setup graceful shutdown
@@ -93,8 +93,8 @@ func (n *Node) Start() error {
 	return n.http.ListenAndServe()
 }
 
-// Cleanup disposes of node resources
-func (n *Node) Cleanup() {
+// Cleanup disposes of node resources to shutdown server gracefully.
+func (n *node) Cleanup() {
 	n.once.Do(func() {
 		log.Print("[info] cleaning up...")
 
@@ -121,8 +121,8 @@ func (n *Node) Cleanup() {
 	})
 }
 
-// join joins node cluster
-func (n *Node) join() error {
+// join joins the minion node cluster by registering self to redis.
+func (n *node) join() error {
 	log.Print("[info] joining cluster...")
 
 	conn := n.redis.Pool.Get()
@@ -132,7 +132,7 @@ func (n *Node) join() error {
 		return err
 	}
 
-	// Initialize node in redis
+	// Initialize minion node in redis
 	if err := conn.Send(
 		"HMSET",
 		nodePrefix+n.id,
@@ -143,7 +143,7 @@ func (n *Node) join() error {
 		return err
 	}
 
-	// Set node key expiration
+	// Set minion node key expiration
 	if err := conn.Send("EXPIRE", nodePrefix+n.id, nodeKeyExpires); err != nil {
 		return err
 	}
@@ -157,15 +157,17 @@ func (n *Node) join() error {
 	return nil
 }
 
-// leave leaves node cluster
-func (n *Node) leave() error {
+// leave leaves minion node cluster by deleting self from redis.
+func (n *node) leave() error {
 	log.Print("[info] leaving cluster...")
-	// Delete node from redis
+	// Delete minion node from redis
 	return n.redis.Delete(nodePrefix + n.id)
 }
 
-// checkin stay in cluster by extending node key expiration
-func (n *Node) checkin() bool {
+// checkin keeps minion node in the cluster by extending node key expiration.
+// If the node goes down, the node key will expire and the node will be treated
+// as inactive.
+func (n *node) checkin() bool {
 	// Extend node key expiration in redis
 	ok, err := n.redis.Expire(nodePrefix+n.id, nodeKeyExpires)
 
@@ -182,9 +184,10 @@ func (n *Node) checkin() bool {
 	return false
 }
 
-// initServer initialize http server
-func (n *Node) initServer() {
+// initServer initializes the http server for the node.
+func (n *node) initServer() {
 	r := mux.NewRouter()
+
 	r.HandleFunc("/healthz", n.wrapMiddleware(healthcheckHandler)).Methods("GET")
 	r.HandleFunc("/ws", n.wrapMiddleware(serveWs)).Methods("GET")
 

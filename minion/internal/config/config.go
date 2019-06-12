@@ -32,7 +32,7 @@ type Config struct {
 	RedisAddr      string
 }
 
-// New creates a new config
+// New creates a new node config.
 func New() *Config {
 	v := viper.New()
 

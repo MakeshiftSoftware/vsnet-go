@@ -19,25 +19,25 @@ const (
 	closeGracePeriod = 10 * time.Second    // Time to wait before force close a connection
 )
 
-// Upgrader default request upgrader
+// upgrader is the websocket connection request upgrader.
 var upgrader = &websocket.Upgrader{
 	ReadBufferSize:  readBufferSize,
 	WriteBufferSize: writeBufferSize,
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-// Client implementation
-type Client struct {
+// client implementation
+type client struct {
 	sess      string          // Unique session ID
 	id        string          // Unique client ID
-	hub       *Hub            // Node hub
+	hub       *hub            // Node hub
 	sock      *websocket.Conn // Underlying socket connection
 	outboundc chan []byte     // Client outbound message channel
 }
 
-// newClient creates a new client
-func newClient(id string, hub *Hub, sock *websocket.Conn) *Client {
-	return &Client{
+// newClient creates a new client.
+func newClient(id string, hub *hub, sock *websocket.Conn) *client {
+	return &client{
 		sess:      uuid.NewV4().String(),
 		id:        id,
 		hub:       hub,
@@ -46,8 +46,8 @@ func newClient(id string, hub *Hub, sock *websocket.Conn) *Client {
 	}
 }
 
-// process processes a client
-func (c *Client) process() {
+// process starts processes for a newly connected client.
+func (c *client) process() {
 	c.sock.SetReadLimit(maxMessageSize)
 	c.sock.SetReadDeadline(time.Now().Add(pongWait))
 	c.sock.SetPongHandler(c.setReadDeadline)
@@ -55,8 +55,8 @@ func (c *Client) process() {
 	go c.write()
 }
 
-// read reads data from client socket
-func (c *Client) read() {
+// read reads data from a client socket to the hub.
+func (c *client) read() {
 	defer func() {
 		c.hub.unregisterc <- c
 		c.sock.Close()
@@ -81,8 +81,8 @@ func (c *Client) read() {
 	}
 }
 
-// write writes data to client socket
-func (c *Client) write() {
+// write writes data from the hub to a client socket.
+func (c *client) write() {
 	ticker := time.NewTicker(pingPeriod)
 
 	defer func() {
@@ -101,7 +101,15 @@ func (c *Client) write() {
 				return
 			}
 
-			if err := c.send(data); err != nil {
+			w, err := c.sock.NextWriter(websocket.BinaryMessage)
+
+			if err != nil {
+				return
+			}
+
+			w.Write(data)
+
+			if err := w.Close(); err != nil {
 				return
 			}
 		case <-ticker.C:
@@ -114,25 +122,12 @@ func (c *Client) write() {
 	}
 }
 
-// send sends data through socket
-func (c *Client) send(data []byte) error {
-	w, err := c.sock.NextWriter(websocket.BinaryMessage)
-
-	if err != nil {
-		return err
-	}
-
-	w.Write(data)
-
-	return w.Close()
-}
-
-// setReadDeadline sets read deadline for client
-func (c *Client) setReadDeadline(string) error {
+// setReadDeadline sets read deadline for a client socket connection.
+func (c *client) setReadDeadline(string) error {
 	return c.sock.SetReadDeadline(time.Now().Add(pongWait))
 }
 
-// setWriteDeadline sets write deadline for client
-func (c *Client) setWriteDeadline() error {
+// setWriteDeadline sets write deadline for a client socket connection.
+func (c *client) setWriteDeadline() error {
 	return c.sock.SetWriteDeadline(time.Now().Add(writeWait))
 }

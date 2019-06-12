@@ -5,11 +5,12 @@ import (
 	"net/http"
 )
 
-// Custom http handler func
-type handler func(*Node, http.ResponseWriter, *http.Request) error
+// handler represents a custom http route handler function.
+type handler func(*node, http.ResponseWriter, *http.Request) error
 
-// wrapMiddleware wraps http handler func
-func (n *Node) wrapMiddleware(h handler) http.HandlerFunc {
+// wrapMiddleware wraps a custom http handler function and returns a handler function
+// in the format that is expected by the http server.
+func (n *node) wrapMiddleware(h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := h(n, w, r)
 
@@ -20,8 +21,8 @@ func (n *Node) wrapMiddleware(h handler) http.HandlerFunc {
 	}
 }
 
-// healthcheckHandler http handler to perform node healthcheck
-func healthcheckHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
+// healthcheckHandler is an http handler function that performs a node healthcheck.
+func healthcheckHandler(n *node, w http.ResponseWriter, r *http.Request) error {
 	ok, err := n.redis.Exists(nodePrefix + n.id)
 
 	if err != nil {
@@ -35,8 +36,8 @@ func healthcheckHandler(n *Node, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// serveWs http handler to upgrade websocket connection requests
-func serveWs(n *Node, w http.ResponseWriter, r *http.Request) error {
+// serveWs is an http handler function that upgrades websocket connection requests.
+func serveWs(n *node, w http.ResponseWriter, r *http.Request) error {
 	sock, err := upgrader.Upgrade(w, r, nil)
 
 	if err != nil {

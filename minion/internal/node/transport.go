@@ -13,8 +13,8 @@ const (
 	masterPrefix = "master:" // Prefix for master message queue in redis
 )
 
-// Transport implementation
-type Transport struct {
+// transport implementation
+type transport struct {
 	wg      sync.WaitGroup  // Wait group
 	redis   *predis.Client  // Redis client
 	id      string          // Node ID
@@ -23,9 +23,9 @@ type Transport struct {
 	quitc   chan struct{}   // Quit channel
 }
 
-// newTransport creates new transport
-func newTransport(id string, redis *predis.Client, masterc chan<- []byte, peerc chan<- *Message) *Transport {
-	return &Transport{
+// newTransport creates a new transport.
+func newTransport(id string, redis *predis.Client, masterc chan<- []byte, peerc chan<- *Message) *transport {
+	return &transport{
 		redis:   redis,
 		id:      id,
 		masterc: masterc,
@@ -34,8 +34,8 @@ func newTransport(id string, redis *predis.Client, masterc chan<- []byte, peerc 
 	}
 }
 
-// start starts transport
-func (t *Transport) start() error {
+// start starts the transport.
+func (t *transport) start() error {
 	log.Print("[info] starting transport...")
 
 	// Start peer message consumer
@@ -53,8 +53,8 @@ func (t *Transport) start() error {
 	return nil
 }
 
-// stop stops transport
-func (t *Transport) stop() error {
+// stop stops the transport.
+func (t *transport) stop() error {
 	log.Print("[info] stopping transport...")
 
 	// Initiate transport shutdown by closing quit channel
@@ -68,27 +68,27 @@ func (t *Transport) stop() error {
 	return nil
 }
 
-// Send sends data to node by id
-func (t *Transport) send(id string, data []byte) error {
-	// Push data into peer queue by id
+// send sends data to a specific node peer by its id.
+func (t *transport) send(id string, data []byte) error {
+	// Push data into peer's message queue
 	return t.redis.Rpush(peerPrefix+id, data)
 }
 
-// receivePeer handles message received from peer message queue
-func (t *Transport) receivePeer(data []byte) error {
+// receivePeer handles messages received from peer message queue.
+func (t *transport) receivePeer(data []byte) error {
 	msg, err := MessageFromBytes(data)
 	t.peerc <- msg
 	return err
 }
 
-// receiveMaster handles message received from master message queue
-func (t *Transport) receiveMaster(data []byte) error {
+// receiveMaster handles messages received from master message queue.
+func (t *transport) receiveMaster(data []byte) error {
 	t.masterc <- data
 	return nil
 }
 
-// listen starts message queue listener on key
-func (t *Transport) listen(key string, receive func(data []byte) error) error {
+// listen starts message queue listener on a key in redis.
+func (t *transport) listen(key string, receive func(data []byte) error) error {
 	conn, err := t.redis.Pool.Dial()
 
 	if err != nil {

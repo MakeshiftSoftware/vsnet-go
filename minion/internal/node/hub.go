@@ -8,32 +8,32 @@ import (
 	predis "github.com/makeshiftsoftware/vsnet/pkg/redis"
 )
 
-// Hub implementation
-type Hub struct {
+// hub implementation
+type hub struct {
 	sync.RWMutex
 	id          string             // Node ID
 	redis       *predis.Client     // Redis client
-	presence    *Presence          // Hub presence
-	transport   *Transport         // Hub transport
-	clients     map[string]*Client // Connected clients
+	presence    *presence          // Hub presence
+	transport   *transport         // Hub transport
+	clients     map[string]*client // Connected clients
 	inboundc    chan *Message      // Client inbound message channel
 	masterc     chan []byte        // Master message channel
 	peerc       chan *Message      // Peer message channel
-	registerc   chan *Client       // Register channel
-	unregisterc chan *Client       // Unregister channel
+	registerc   chan *client       // Register channel
+	unregisterc chan *client       // Unregister channel
 }
 
-// newHub creates new hub
-func newHub(id string, redis *predis.Client) *Hub {
-	h := &Hub{
+// newHub creates a new hub.
+func newHub(id string, redis *predis.Client) *hub {
+	h := &hub{
 		id:          id,
 		redis:       redis,
-		clients:     make(map[string]*Client),
+		clients:     make(map[string]*client),
 		inboundc:    make(chan *Message),
 		peerc:       make(chan *Message),
 		masterc:     make(chan []byte),
-		registerc:   make(chan *Client),
-		unregisterc: make(chan *Client),
+		registerc:   make(chan *client),
+		unregisterc: make(chan *client),
 	}
 
 	h.presence = newPresence(h.id, h.redis)
@@ -42,8 +42,8 @@ func newHub(id string, redis *predis.Client) *Hub {
 	return h
 }
 
-// start starts hub
-func (h *Hub) start() error {
+// start starts the hub.
+func (h *hub) start() error {
 	// Start transport
 	if err := h.transport.start(); err != nil {
 		return err
@@ -75,8 +75,8 @@ func (h *Hub) start() error {
 	return nil
 }
 
-// stop stops hub
-func (h *Hub) stop() {
+// stop stops the hub.
+func (h *hub) stop() {
 	h.Lock()
 	defer h.Unlock()
 
@@ -103,8 +103,32 @@ func (h *Hub) stop() {
 	}
 }
 
-// onClientConnected occurs when a new client connection is accepted
-func (h *Hub) onClientConnected(sock *websocket.Conn) error {
+// registerClient registers a client to the hub.
+func (h *hub) registerClient(c *client) {
+	h.Lock()
+	defer h.Unlock()
+
+	// Add client id to connected clients map
+	h.clients[c.id] = c
+}
+
+// unregisterClient unregisters a client from the hub.
+func (h *hub) unregisterClient(c *client) {
+	h.Lock()
+	defer h.Unlock()
+
+	// Check if client exists in hub
+	client, ok := h.clients[c.id]
+
+	// Check if client's session id is the same as the client
+	// being unregistered.
+	if ok && client.sess == c.sess {
+		delete(h.clients, c.id)
+	}
+}
+
+// onClientConnected handles a new client socket connection.
+func (h *hub) onClientConnected(sock *websocket.Conn) error {
 	// Create new client
 	c := newClient("abc", h, sock)
 
@@ -121,33 +145,9 @@ func (h *Hub) onClientConnected(sock *websocket.Conn) error {
 	return nil
 }
 
-// registerClient registers client to hub
-func (h *Hub) registerClient(c *Client) {
-	h.Lock()
-	defer h.Unlock()
-
-	// Register client id to connected clients map
-	h.clients[c.id] = c
-}
-
-// unregisterClient unregisters client from hub
-func (h *Hub) unregisterClient(c *Client) {
-	h.Lock()
-	defer h.Unlock()
-
-	// Check if client exists in hub
-	client, ok := h.clients[c.id]
-
-	// Check if client's session id is the same as the client
-	// being unregistered.
-	if ok && client.sess == c.sess {
-		delete(h.clients, c.id)
-	}
-}
-
-// onClientMessage handles message received from client
-// sends message to designated recipients on remote nodes
-func (h *Hub) onClientMessage(msg *Message) error {
+// onClientMessage handles messages received from client. Routes messages received
+// to their intended recipients on remote minion nodes.
+func (h *hub) onClientMessage(msg *Message) error {
 	locations, err := h.presence.locate(msg.GetRecipients())
 
 	if err != nil {
@@ -169,9 +169,9 @@ func (h *Hub) onClientMessage(msg *Message) error {
 	return nil
 }
 
-// onPeerMessage handles message received from peer
-// sends message to designated recipients on local node
-func (h *Hub) onPeerMessage(msg *Message) error {
+// onPeerMessage handles messages received from peer nodes. Routes message to intended
+// recipients on the local minion node.
+func (h *hub) onPeerMessage(msg *Message) error {
 	// Get outbound message for delivery
 	data, err := msg.GetOutbound()
 
@@ -197,7 +197,7 @@ func (h *Hub) onPeerMessage(msg *Message) error {
 	return nil
 }
 
-// onMasterMessage handles message received from master
-func (h *Hub) onMasterMessage(data []byte) error {
+// onMasterMessage handles messages received from master node.
+func (h *hub) onMasterMessage(data []byte) error {
 	return nil
 }

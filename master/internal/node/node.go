@@ -21,8 +21,8 @@ const (
 	masterKeyExpires = 10              // Time (in seconds) to expire master lock key (should be longer than refreshPeriod)
 )
 
-// Node implementation
-type Node struct {
+// node implementation
+type node struct {
 	sync.RWMutex
 	once     sync.Once
 	wg       sync.WaitGroup
@@ -35,8 +35,8 @@ type Node struct {
 }
 
 // New creates a new node.
-func New(cfg *config.Config) *Node {
-	n := &Node{
+func New(cfg *config.Config) *node {
+	n := &node{
 		cfg:      cfg,
 		master:   false,
 		redis:    predis.New(cfg.RedisAddr),
@@ -50,7 +50,7 @@ func New(cfg *config.Config) *Node {
 }
 
 // Start starts the node.
-func (n *Node) Start() error {
+func (n *node) Start() error {
 	log.Print("[info] starting node...")
 
 	grace.HookSignals(n.quitc, n.Cleanup)
@@ -71,8 +71,8 @@ func (n *Node) Start() error {
 	return n.http.ListenAndServe()
 }
 
-// Cleanup disposes of node resources to exit gracefully.
-func (n *Node) Cleanup() {
+// Cleanup disposes of node resources to shutdown server gracefully.
+func (n *node) Cleanup() {
 	n.once.Do(func() {
 		log.Print("[info] cleaning up...")
 
@@ -89,7 +89,7 @@ func (n *Node) Cleanup() {
 
 // upgrade attempts to upgrade node to a master node by acquiring the master lock.
 // The lock is acquired if the node successfully sets the master key value in redis.
-func (n *Node) upgrade() bool {
+func (n *node) upgrade() bool {
 	n.Lock()
 	defer n.Unlock()
 
@@ -122,7 +122,7 @@ func (n *Node) upgrade() bool {
 // maintain maintains control of master lock by extending the master key's expiration time.
 // If the node goes down, the master key will eventually expire and become available to other
 // nodes to acquire.
-func (n *Node) maintain() bool {
+func (n *node) maintain() bool {
 	n.Lock()
 	defer n.Unlock()
 
@@ -150,7 +150,7 @@ func (n *Node) maintain() bool {
 }
 
 // initServer initializes the http server for the node.
-func (n *Node) initServer() {
+func (n *node) initServer() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/healthz", n.wrapMiddleware(healthcheckHandler)).Methods("GET")
